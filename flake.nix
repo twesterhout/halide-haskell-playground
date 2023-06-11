@@ -67,9 +67,9 @@
       # The formatter to use for .nix files (but not .hs files)
       # Allows us to run `nix fmt` to reformat nix files.
       formatter = pkgs.nixpkgs-fmt;
-      # templates.default = {
-      #   path = ./.;
-      # };
+      templates.default = {
+        path = ./.;
+      };
     }
   );
 }
