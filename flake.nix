@@ -5,6 +5,7 @@
     extra-experimental-features = "nix-command flakes";
     extra-substituters = "https://halide-haskell.cachix.org";
     extra-trusted-public-keys = "halide-haskell.cachix.org-1:cFPqtShCsH4aNjn2q4PHb39Omtd/FWRhrkTBcSrtNKQ=";
+    allow-import-from-derivation = true;
   };
 
   inputs = {
@@ -66,6 +67,9 @@
       # The formatter to use for .nix files (but not .hs files)
       # Allows us to run `nix fmt` to reformat nix files.
       formatter = pkgs.nixpkgs-fmt;
+      # templates.default = {
+      #   path = ./.;
+      # };
     }
   );
 }
