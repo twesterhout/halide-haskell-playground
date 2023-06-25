@@ -10,69 +10,74 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/haskell-updates";
-    flake-utils.url = "github:numtide/flake-utils";
     nix-filter.url = "github:numtide/nix-filter";
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
-      flake = false;
-    };
   };
 
-  outputs = inputs: inputs.flake-utils.lib.eachDefaultSystem
-    (system:
-      with builtins;
-      let
-        pkgs = import inputs.nixpkgs { inherit system; };
-
-        # Only consider source dirs and .cabal files as the source to our Haskell package.
-        # This allows the project to rebuild only when the source files change.
-        src = inputs.nix-filter.lib {
-          root = ./.;
-          include = [
-            "src"
-            "test"
-            (inputs.nix-filter.lib.matchExt "cabal")
-            "README.md"
-            "LICENSE"
-          ];
-        };
-
-        ghcVersion = "928";
-        haskellPackages = pkgs.haskell.packages."ghc${ghcVersion}".override {
-          overrides = self: suprt: {
-            halide-haskell-playground =
-              (self.callCabal2nix "halide-haskell-playground" src { });
+  outputs = inputs:
+    let
+      lib = inputs.nixpkgs.lib;
+      foreach = xs: f: with lib; foldr recursiveUpdate { } (
+        if isList xs then map f xs
+        else if isAttrs xs then mapAttrsToList f xs
+        else error "foreach: expected list or attrset"
+      );
+      nix-filter = inputs.nix-filter.lib;
+      # Only consider source dirs and .cabal files as the source to our Haskell package.
+      # This allows the project to rebuild only when the source files change.
+      src = nix-filter {
+        root = ./.;
+        include = [
+          "src"
+          "test"
+          (nix-filter.matchExt "cabal")
+          "README.md"
+          "LICENSE"
+        ];
+      };
+      pname = "halide-haskell-playground";
+    in
+    with builtins;
+    with lib;
+    foreach inputs.nixpkgs.legacyPackages
+      (system: pkgs:
+        let
+          haskellPackages = mapAttrs
+            (_: ps: ps.override {
+              overrides = self: super: {
+                "${pname}" = self.callCabal2nix pname src { };
+              };
+            })
+            ({ default = pkgs.haskellPackages; } // filterAttrs (name: _: match "ghc[0-9]+" name != null) pkgs.haskell.packages);
+        in
+        {
+          packages.${system} = haskellPackages // {
+            default = haskellPackages.default.${pname};
           };
-        };
-
-      in
-      {
-        packages.default = haskellPackages.halide-haskell-playground;
-        devShells.default = haskellPackages.shellFor {
-          packages = ps: with ps; [
-            halide-haskell-playground
-          ];
-          withHoogle = true;
-          nativeBuildInputs = with pkgs; with haskellPackages; [
-            # Building and testing
-            cabal-install
-            # Language servers
-            haskell-language-server
-            nil
-            # Formatters
-            fourmolu
-            cabal-fmt
-            nixpkgs-fmt
-          ];
-        };
-        # The formatter to use for .nix files (but not .hs files)
-        # Allows us to run `nix fmt` to reformat nix files.
-        formatter = pkgs.nixpkgs-fmt;
-      })
-  // {
-    templates.default = {
-      path = ./.;
-      description = "Minimal Haskell project with halide-haskell";
+          devShells.${system} = mapAttrs
+            (_: ps: ps.shellFor {
+              packages = _: [ ps.${pname} ];
+              withHoogle = true;
+              nativeBuildInputs = with pkgs; with ps; [
+                # Building and testing
+                cabal-install
+                # Language servers
+                haskell-language-server
+                nil
+                # Formatters
+                fourmolu
+                cabal-fmt
+                nixpkgs-fmt
+              ];
+            })
+            haskellPackages;
+          formatter.${system} = pkgs.nixpkgs-fmt;
+        }
+      )
+    //
+    {
+      templates.default = {
+        path = ./.;
+        description = "Minimal Haskell project with halide-haskell";
+      };
     };
-  };
 }
